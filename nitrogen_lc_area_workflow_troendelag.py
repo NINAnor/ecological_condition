@@ -303,17 +303,12 @@ def run_script(iface):
 
             # Calculate area percentages and insert in nitrogen_kommune layer's attribute table
 
-        lnr_index = nitrogen_kommune.fieldNameIndex('lnr')
-
-
-
-
 
         with edit(nitrogen_kommune):
             for i, feat in enumerate(nitrogen_kommune.getFeatures()):
 
-                lnr_value = feat.attributes()[lnr_index]
-                print('lnr value is: ' + lnr_value)
+                lnr_value = feat.attribute('lnr')
+                print('lnr value is: ' + str(lnr_value))
 
                 # This will be a dictionary having as a key the lnr identification number of each rectangle fragment,
                 # and as a value a list of dictionaries. Each dictionary in list will contain the area values of a rectangle
@@ -388,7 +383,7 @@ def run_script(iface):
     with edit(nitrogen):
         for i, feat in enumerate(nitrogen.getFeatures()):
 
-            lnr_value = feat.attributes()[lnr_index]
+            lnr_value = feat.attributes('lnr')
             print('lnr value is: ' + lnr_value)
 
             # This will be a dictionary having as a key the lnr identification number of each rectangle fragment,
