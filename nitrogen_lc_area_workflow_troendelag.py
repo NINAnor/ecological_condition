@@ -15,6 +15,7 @@ from qgis.gui import *
 import processing
 from processing.core.Processing import Processing
 import os
+from collections import defaultdict
 
 Processing.initialize()
 
@@ -108,8 +109,11 @@ def run_script(iface):
 
         return area
 
+    rect_frag_area_dict = defaultdict(list)
+
 
     ar5_directory = os.fsencode(working_directory + '/Input_AR5_layers/')
+
     for file in os.listdir(ar5_directory):
         filename = os.fsdecode(file)
         kommune_name = filename[15:-19]
@@ -127,7 +131,7 @@ def run_script(iface):
         n50_kommune = query_layer(query, input_layer, kommune_border_name)
 
         # clip nitrogen over current kommune
-        nitrogen_kommune_name = nitrogen_outputs + 'nitrogen_' + kommune_name
+        nitrogen_kommune_name = 'nitrogen_' + kommune_name
         nitrogen_kommune = geoprocess_layer(clip_alg, nitrogen, n50_kommune, nitrogen_kommune_name)
 
         # clip ar50 over current Kommune
@@ -194,7 +198,7 @@ def run_script(iface):
         # Now we need to calculate area percentage per nitrogen rectangular clipped polygon #
         #####################################################################################
 
-        # Add new fields to nitrogen_trondheim attributte table
+        # Add new fields to nitrogen_trondheim attribute table
         n_provider = nitrogen_kommune.dataProvider()
         n_provider.addAttributes([QgsField("area_rect", QVariant.Double)])
         n_provider.addAttributes([QgsField("myr_area", QVariant.Double)])
@@ -298,8 +302,26 @@ def run_script(iface):
             nitrogen_kommune.removeSelection()
 
             # Calculate area percentages and insert in nitrogen_kommune layer's attribute table
+
+        lnr_index = nitrogen_kommune.fieldNameIndex('lnr')
+
+
+
+
+
         with edit(nitrogen_kommune):
             for i, feat in enumerate(nitrogen_kommune.getFeatures()):
+
+                lnr_value = feat.attributes()[lnr_index]
+                print('lnr value is: ' + lnr_value)
+
+                # This will be a dictionary having as a key the lnr identification number of each rectangle fragment,
+                # and as a value a list of dictionaries. Each dictionary in list will contain the area values of a rectangle
+                # fragment with the same id of the original whole rectangle.
+
+                area_dict = {}
+
+
                 try:
                     feat.setAttribute('area_rect', rect_areas[i])
                     feat.setAttribute('myr_area', myr_areas[i])
@@ -327,9 +349,85 @@ def run_script(iface):
                     print("Error setting Area")
                     return
 
-    for layer in QgsMapLayerRegistry.instance().mapLayers().values().startswith('nitrogen_'):
-        print(layer.name())
+                # populate the dictionary containing ares of a rectangular fragment
+                area_dict['area_rect'] = rect_areas[i]
+                area_dict['myr_area'] = myr_areas[i]
+                area_dict['grass_area'] = grass_areas[i]
+                area_dict['mountain_area'] = mountain_areas[i]
+                area_dict['forest_11_area'] = forest_11_areas[i]
+                area_dict['forest_13_area'] = forest_13_areas[i]
+                area_dict['forest_14_area'] = forest_14_areas[i]
+                area_dict['myr_area_perc'] = myr_perc
+                area_dict['grass_area_perc'] = grass_perc
+                area_dict['mountain_area_perc'] = mountain_perc
+                area_dict['forest_11_area_perc'] = forest_11_perc
+                area_dict['forest_13_area_perc'] = forest_13_perc
+                area_dict['forest_14_area_perc'] =  forest_14_perc
 
+                # append the area dictionary to a a list with key = rectangle identifier
+                rect_frag_area_dict[lnr_value].append(area_dict)
+
+    print(rect_frag_area_dict)
+
+    n_provider = nitrogen.dataProvider()
+    n_provider.addAttributes([QgsField("area_rect", QVariant.Double)])
+    n_provider.addAttributes([QgsField("myr_area", QVariant.Double)])
+    n_provider.addAttributes([QgsField("myr_area_perc", QVariant.Double)])
+    n_provider.addAttributes([QgsField("grass_area", QVariant.Double)])
+    n_provider.addAttributes([QgsField("grass_area_perc", QVariant.Double)])
+    n_provider.addAttributes([QgsField("mountain_area", QVariant.Double)])
+    n_provider.addAttributes([QgsField("mountain_area_perc", QVariant.Double)])
+    n_provider.addAttributes([QgsField("forest_11_area", QVariant.Double)])
+    n_provider.addAttributes([QgsField("forest_11_area_perc", QVariant.Double)])
+    n_provider.addAttributes([QgsField("forest_13_area", QVariant.Double)])
+    n_provider.addAttributes([QgsField("forest_13_area_perc", QVariant.Double)])
+    n_provider.addAttributes([QgsField("forest_14_area", QVariant.Double)])
+    n_provider.addAttributes([QgsField("forest_14_area_perc", QVariant.Double)])
+    nitrogen_kommune.updateFields()
+
+    with edit(nitrogen):
+        for i, feat in enumerate(nitrogen.getFeatures()):
+
+            lnr_value = feat.attributes()[lnr_index]
+            print('lnr value is: ' + lnr_value)
+
+            # This will be a dictionary having as a key the lnr identification number of each rectangle fragment,
+            # and as a value a list of dictionaries. Each dictionary in list will contain the area values of a rectangle
+            # fragment with the same id of the original whole rectangle.
+
+            area_rect = sum([a_dict['area_rect'] for a_dict in rect_frag_area_dict[lnr_value]])
+            myr_area = sum([a_dict['area_rect'] for a_dict in rect_frag_area_dict[lnr_value]])
+            grass_area = sum([a_dict['area_rect'] for a_dict in rect_frag_area_dict[lnr_value]])
+            mountain_area = sum([a_dict['area_rect'] for a_dict in rect_frag_area_dict[lnr_value]])
+            forest_11_area = sum([a_dict['area_rect'] for a_dict in rect_frag_area_dict[lnr_value]])
+            forest_13_area = sum([a_dict['area_rect'] for a_dict in rect_frag_area_dict[lnr_value]])
+            forest_14_area = sum([a_dict['area_rect'] for a_dict in rect_frag_area_dict[lnr_value]])
+            try:
+                feat.setAttribute('area_rect', area_rect)
+                feat.setAttribute('myr_area', myr_area)
+                feat.setAttribute('grass_area', grass_area)
+                feat.setAttribute('mountain_area', mountain_area)
+                feat.setAttribute('forest_11_area', forest_11_area)
+                feat.setAttribute('forest_13_area', forest_13_area)
+                feat.setAttribute('forest_14_area', forest_14_area)
+
+                myr_perc = myr_areas / rect_areas * 100
+                grass_perc = grass_areas / rect_areas * 100
+                mountain_perc = mountain_areas / rect_areas * 100
+                forest_11_perc = forest_11_areas / rect_areas * 100
+                forest_13_perc = forest_13_areas / rect_areas * 100
+                forest_14_perc = forest_14_areas / rect_areas * 100
+
+                feat.setAttribute('myr_area_perc', myr_perc)
+                feat.setAttribute('grass_area_perc', grass_perc)
+                feat.setAttribute('mountain_area_perc', mountain_perc)
+                feat.setAttribute('forest_11_area_perc', forest_11_perc)
+                feat.setAttribute('forest_13_area_perc', forest_13_perc)
+                feat.setAttribute('forest_14_area_perc', forest_14_perc)
+                nitrogen.updateFeature(feat)
+            except ValueError:
+                print("Error setting Area")
+                return
 
     print("Hello again Simon! Processing completed!")
 
