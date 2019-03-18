@@ -118,7 +118,7 @@ def run_script(iface):
     #processing.run(alg, params)
 
     # Importing the forest limit layer, cleaned
-    # TODO: maybe just substitute the original, keping same name?
+    # TODO: maybe just substitute the original, keeping same name?
     forest_limit_fixed = QgsVectorLayer(
         working_directory + '/Outputs/script/forest_limit_fixed.gpkg',
         'forest_limit_fixed',
@@ -279,7 +279,7 @@ def run_script(iface):
     # Now we need to calculate area percentage per nitrogen rectangular clipped polygon #
     #####################################################################################
 
-    # Add myr_area attribute to nitrogen_trondheim
+    # Add new fields to nitrogen_trondheim attributte table
     n_provider = nitrogen_trondheim.dataProvider()
     n_provider.addAttributes([QgsField("area_rect", QVariant.Double)])
     n_provider.addAttributes([QgsField("myr_area", QVariant.Double)])
