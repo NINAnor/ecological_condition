@@ -48,7 +48,8 @@ def run_script(iface):
     root.removeAllChildren()
 
     n50 = QgsVectorLayer(working_directory + '/Input_N50_layers/N50_AdministrativeOmråder.shp', 'n50_borders', 'ogr')
-    ar50_troendelag = QgsVectorLayer(working_directory + '/Input_AR50_layers/AR50_50_5e8c55.shp', 'ar50_troendelag', 'ogr')
+    # Now loading the geometry clean version of AR50 troendelag layer
+    ar50_troendelag = QgsVectorLayer(working_directory + '/Input_AR50_layers/clean_ar50_troendelag.shp', 'ar50_troendelag', 'ogr')
     nitrogen = QgsVectorLayer(working_directory + '/nitrogen/nitrogen_repro_clip.shp', 'nitrogen', 'ogr')
     forest_limit = QgsVectorLayer(working_directory + '/Outputs/script/forest_limit_fixed.gpkg',
                                   'forest_limit', 'ogr')
