@@ -16,17 +16,10 @@ def run_script(iface):
 
     # Set the working environment folders. Requires input data being organized in a precise structure
     working_directory = "C:/Data/Simon"
-    output_directory = '/new_outputs/'
-    nitrogen_outputs = '/nitrogen_outputs/'
-    nitrogen_outputs_fullpath = working_directory + output_directory + nitrogen_outputs
-
-    if os.path.isdir(nitrogen_outputs_fullpath):
-        pass
-    else:
-        os.mkdir(nitrogen_outputs_fullpath)
 
     #Greet Simon!
     print("Hello Simon! Starting the processing now!")
+
     project = QgsProject.instance()
 
     project.removeAllMapLayers()
@@ -58,5 +51,7 @@ def run_script(iface):
             working_directory + '/clean_input_AR5_layers/clean_ar5_' + kommune_num + '_' + kommune_name + '.gpkg',
             'ar5_clean_' + kommune_name, 'ogr')
         project.addMapLayer(ar5_kommune_clean)
+
+
 
 
