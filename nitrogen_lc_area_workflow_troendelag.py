@@ -27,7 +27,7 @@ def run_script(iface):
 
     # Set the working environment folders. Requires input data being organized in a precise structure
     working_directory = "C:/Data/Simon"
-    output_directory = '/new_outputs/'
+    output_directory = '/very_new_outputs/'
     nitrogen_outputs = '/nitrogen_outputs/'
     nitrogen_outputs_fullpath = working_directory + output_directory + nitrogen_outputs
 
@@ -49,8 +49,18 @@ def run_script(iface):
 
     n50 = QgsVectorLayer(working_directory + '/Input_N50_layers/N50_AdministrativeOmråder.shp', 'n50_borders', 'ogr')
     # Now loading the geometry clean version of AR50 troendelag layer
-    ar50_troendelag = QgsVectorLayer(working_directory + '/Input_AR50_layers/clean_ar50_troendelag.shp', 'ar50_troendelag', 'ogr')
-    nitrogen = QgsVectorLayer(working_directory + '/nitrogen/nitrogen_repro_clip.shp', 'nitrogen', 'ogr')
+    ar50_troendelag = QgsVectorLayer(working_directory + '/Input_AR50_layers/clean_ar50_troendelag.gpkg', 'ar50_troendelag', 'ogr')
+    #ar50_troendelag = QgsVectorLayer(working_directory + '/Input_AR50_layers/AR50_50_5e8c55.shp', 'ar50_troendelag', 'ogr')
+    input_nitrogen = QgsVectorLayer(working_directory + '/nitrogen/nitrogen_troendelag_input.gpkg', 'input_nitrogen', 'ogr')
+
+    alg = u'native:fixgeometries'
+    params = {"INPUT": input_nitrogen,
+              "OUTPUT": nitrogen_outputs_fullpath + 'nitrogen_troendelag_output.gpkg'}
+    processing.run(alg, params)
+
+    # Save the nitrogen layer as an output with a different name
+
+    nitrogen = QgsVectorLayer(nitrogen_outputs_fullpath + 'nitrogen_troendelag_output.gpkg', 'nitrogen', 'ogr')
     forest_limit = QgsVectorLayer(working_directory + '/Outputs/script/forest_limit_fixed.gpkg',
                                   'forest_limit', 'ogr')
 
@@ -136,9 +146,8 @@ def run_script(iface):
         nitrogen_kommune = geoprocess_layer(clip_alg, nitrogen, n50_kommune, nitrogen_kommune_name)
 
         # clip ar50 over current Kommune
-        # TODO: AR50 needs geometry fixing before use
         ar50_kommune_name = 'ar50_' + kommune_name
-        geoprocess_layer(clip_alg, ar50_troendelag, n50_kommune, ar50_kommune_name)
+        ar50_kommune = geoprocess_layer(clip_alg, ar50_troendelag, n50_kommune, ar50_kommune_name)
 
         # now pointing to the layers with fixed geometries (clean_AR5_layers.geometries.py)
         ar5_kommune = QgsVectorLayer(
@@ -146,8 +155,15 @@ def run_script(iface):
             'ar5_clean_' + kommune_name, 'ogr')
         project.addMapLayer(ar5_kommune)
 
+        '''
+        ar5_kommune = QgsVectorLayer(
+            working_directory + '/Input_AR5_layers/Basisdata_' + kommune_num + '_' + kommune_name +'_25832_FKB-AR5_SOSI/Basisdata_' + kommune_num +'_' + kommune_name +'_25832_FKB-AR5_SOSI_polygon.shp',
+            'AR5_' + kommune_name, 'ogr')
+        project.addMapLayer(ar5_kommune)
+        '''
+
         # Filtering mountain areas from AR5, not yet clipped by forest limit
-        query2 = u"ARTYPE = '50' OR ARTYPE = '99'"
+        query2 = u"ARTYPE = '50'"
         input_layer = ar5_kommune
         mountain_rough_name = 'ar50_mountain_rough_' + kommune_name
         print(query2)
@@ -196,11 +212,33 @@ def run_script(iface):
         forest_14_name = 'ar5_skog_14_' + kommune_name
         ar5_forest_14_kommune = query_layer(query8, input_layer, forest_14_name)
 
+        # Find non registered areas in AR5 current kommune
+        query9 = u"ARTYPE = '99'"
+        input_layer = ar5_kommune
+        unregistered_name = 'ar5_unregistered_' + kommune_name
+        ar5_unregistered_kommune = query_layer(query9, input_layer, unregistered_name)
+
+        # clip AR50 kommune on unregistered AR5 areas
+        ar50_coverunregistered_name = 'ar5_coverunregistered_' + kommune_name
+        ar50_coverunregistered_kommune = geoprocess_layer(clip_alg, ar50_kommune, ar5_unregistered_kommune,
+                                                          ar50_coverunregistered_name)
+        # find forest in clipped AR50 covering Ar5 unregistered areas
+        query10 = u"ARTYPE = '30'"
+        input_layer = ar50_coverunregistered_kommune
+        ar50_forest_name = 'ar50_unregistered_forest_' + kommune_name
+        ar50_unregistered_forest_kommune = query_layer(query10, input_layer, ar50_forest_name)
+
+        # find myr in clipped AR50 covering Ar5 unregistered areas
+        query11 = u"ARTYPE = '60'"
+        input_layer = ar50_coverunregistered_kommune
+        ar50_myr_name = 'ar50_unregistered_myr_' + kommune_name
+        ar50_unregistered_myr_kommune = query_layer(query11, input_layer, ar50_myr_name)
+
         #####################################################################################
         # Now we need to calculate area percentage per nitrogen rectangular clipped polygon #
         #####################################################################################
 
-        # Add new fields to nitrogen_trondheim attribute table
+        # Add new fields to nitrogen_kommune attribute table
         n_provider = nitrogen_kommune.dataProvider()
         n_provider.addAttributes([QgsField("area_rect", QVariant.Double)])
         n_provider.addAttributes([QgsField("myr_area", QVariant.Double)])
@@ -215,6 +253,10 @@ def run_script(iface):
         n_provider.addAttributes([QgsField("forest_13_area_perc", QVariant.Double)])
         n_provider.addAttributes([QgsField("forest_14_area", QVariant.Double)])
         n_provider.addAttributes([QgsField("forest_14_area_perc", QVariant.Double)])
+        n_provider.addAttributes([QgsField("forest_ar50_area", QVariant.Double)])
+        n_provider.addAttributes([QgsField("forest_ar50_area_perc", QVariant.Double)])
+        n_provider.addAttributes([QgsField("myr_ar50_area", QVariant.Double)])
+        n_provider.addAttributes([QgsField("myr_ar50_area_perc", QVariant.Double)])
         nitrogen_kommune.updateFields()
 
         rect_areas = {}
@@ -224,6 +266,8 @@ def run_script(iface):
         forest_11_areas = {}
         forest_13_areas = {}
         forest_14_areas = {}
+        forest_ar50_areas = {}
+        myr_ar50_areas = {}
 
         feats_nit = [feat for feat in nitrogen_kommune.getFeatures()]
 
@@ -244,9 +288,8 @@ def run_script(iface):
 
             # selecting each rectangular nitrogen polygon one by one
             nitrogen_kommune.select(feat.id())
-            temp_feat_layer = nitrogen_kommune.materialize(
-                QgsFeatureRequest().setFilterFids(nitrogen_kommune.selectedFeatureIds()))
-            #project.addMapLayer(temp_feat_layer)
+            temp_feat_layer = nitrogen_kommune.materialize(QgsFeatureRequest().setFilterFids(nitrogen_kommune.selectedFeatureIds()))
+            project.addMapLayer(temp_feat_layer)
 
             # process grassland
             ar5_grass_kommune_clip_name = 'ar5_grass_clip_' + kommune_name + '_' + str(i)
@@ -254,15 +297,12 @@ def run_script(iface):
 
             # process Myr
             ar5_myr_kommune_clip_name = 'ar5_myr_clip_' + kommune_name + '_' + str(i)
-            temp_myr_clip = geoprocess_layer(clip_alg, ar5_myr_kommune, temp_feat_layer, ar5_myr_kommune_clip_name, add_layer=False)
+            temp_myr_clip = geoprocess_layer(clip_alg, ar5_myr_kommune, temp_feat_layer, ar5_myr_kommune_clip_name, add_layer=True)
 
             # process mountain
-            try:
-                ar5_mountain_kommune_clip_name = 'ar5_mountain_clip_' + kommune_name + '_' + str(i)
-                temp_mountain_clip = geoprocess_layer(clip_alg, ar5_mountain_clean_kommune, temp_feat_layer, ar5_mountain_kommune_clip_name, add_layer=False)
-            except QgsException:
-                print("error while processing clip over " + ar5_mountain_kommune_clip_name)
-                return
+            ar5_mountain_kommune_clip_name = 'ar5_mountain_clip_' + kommune_name + '_' + str(i)
+            temp_mountain_clip = geoprocess_layer(clip_alg, ar5_mountain_clean_kommune, temp_feat_layer, ar5_mountain_kommune_clip_name, add_layer=False)
+
             ###########################
             #  FOREST SUB-CLASSES ###
             ###########################
@@ -281,6 +321,16 @@ def run_script(iface):
             ar5_forest_14_kommune_name = 'ar5_forest_14_kommune_' + kommune_name + '_' + str(i)
             temp_forest_14 = geoprocess_layer(clip_alg, ar5_forest_14_kommune, temp_feat_layer, ar5_forest_14_kommune_name,
                              add_layer=False)
+
+            ar50_unregistered_forest_kommune_name = 'ar50_unregistered_forest_kommune_' + kommune_name + '_' + str(i)
+            temp_forest_ar50 = geoprocess_layer(clip_alg, ar50_unregistered_forest_kommune, temp_feat_layer,
+                                            ar50_unregistered_forest_kommune_name,
+                                              add_layer=False)
+
+            ar50_unregistered_myr_kommune_name = 'ar50_unregistered_forest_kommune_' + kommune_name + '_' + str(i)
+            temp_myr_ar50 = geoprocess_layer(clip_alg, ar50_unregistered_myr_kommune, temp_feat_layer,
+                                                ar50_unregistered_myr_kommune_name,
+                                                add_layer=False)
 
             ############################################
             # Store areas per fragment in dictionaries #
@@ -304,6 +354,12 @@ def run_script(iface):
             forest_14_area = calculate_area_over_clip(temp_forest_14)
             forest_14_areas[i] = forest_14_area
 
+            forest_ar50_area = calculate_area_over_clip(temp_forest_ar50)
+            forest_ar50_areas[i] = forest_ar50_area
+
+            myr_ar50_area = calculate_area_over_clip(temp_myr_ar50)
+            myr_ar50_areas[i] = myr_ar50_area
+
             nitrogen_kommune.removeSelection()
 
             # Calculate area percentages and insert in nitrogen_kommune layer's attribute table
@@ -313,7 +369,7 @@ def run_script(iface):
             for i, feat in enumerate(nitrogen_kommune.getFeatures()):
 
                 lnr_value = feat.attribute('lnr')
-                print('lnr value is: ' + str(lnr_value))
+                print('kommune: lnr value is: ' + str(lnr_value))
 
                 # This will be a dictionary having as a key the lnr identification number of each rectangle fragment,
                 # and as a value a list of dictionaries. Each dictionary in list will contain the area values of a rectangle
@@ -333,6 +389,8 @@ def run_script(iface):
                     feat.setAttribute('forest_11_area', forest_11_areas[i])
                     feat.setAttribute('forest_13_area', forest_13_areas[i])
                     feat.setAttribute('forest_14_area', forest_14_areas[i])
+                    feat.setAttribute('forest_ar50_area', forest_ar50_areas[i])
+                    feat.setAttribute('myr_ar50_area', myr_ar50_areas[i])
 
                     myr_perc = myr_areas[i] / rect_areas[i] * 100
                     grass_perc = grass_areas[i] / rect_areas[i] * 100
@@ -340,6 +398,8 @@ def run_script(iface):
                     forest_11_perc = forest_11_areas[i] / rect_areas[i] * 100
                     forest_13_perc = forest_13_areas[i] / rect_areas[i] * 100
                     forest_14_perc = forest_14_areas[i] / rect_areas[i] * 100
+                    forest_ar50_perc = forest_ar50_areas[i] / rect_areas[i] * 100
+                    myr_ar50_perc = myr_ar50_areas[i] / rect_areas[i] * 100
 
                     feat.setAttribute('myr_area_perc', myr_perc)
                     feat.setAttribute('grass_area_perc', grass_perc)
@@ -347,6 +407,8 @@ def run_script(iface):
                     feat.setAttribute('forest_11_area_perc', forest_11_perc)
                     feat.setAttribute('forest_13_area_perc', forest_13_perc)
                     feat.setAttribute('forest_14_area_perc', forest_14_perc)
+                    feat.setAttribute('forest_ar50_area_perc', forest_ar50_perc)
+                    feat.setAttribute('myr_ar50_area_perc', myr_ar50_perc)
                     nitrogen_kommune.updateFeature(feat)
                 except ValueError:
                     print("Error setting Area")
@@ -378,14 +440,24 @@ def run_script(iface):
                     area_dict['forest_14_area'] = forest_14_areas[i]
                 else:
                     area_dict['forest_14_area'] = 0
+                if forest_ar50_areas[i]:
+                    area_dict['forest_ar50_area'] = forest_ar50_areas[i]
+                else:
+                    area_dict['forest_ar50_area'] = 0
+                if myr_ar50_areas[i]:
+                    area_dict['myr_ar50_area'] = myr_ar50_areas[i]
+                else:
+                    area_dict['myr_ar50_area'] = 0
                 area_dict['myr_area_perc'] = myr_perc
                 area_dict['grass_area_perc'] = grass_perc
                 area_dict['mountain_area_perc'] = mountain_perc
                 area_dict['forest_11_area_perc'] = forest_11_perc
                 area_dict['forest_13_area_perc'] = forest_13_perc
-                area_dict['forest_14_area_perc'] =  forest_14_perc
+                area_dict['forest_14_area_perc'] = forest_14_perc
+                area_dict['forest_ar50_area_perc'] = forest_ar50_perc
+                area_dict['myr_ar50_area_perc'] = myr_ar50_perc
 
-                # append the area dictionary to a a list with key = rectangle identifier
+                # append the area dictionary to a list with key = rectangle identifier
                 rect_frag_area_dict[lnr_value].append(area_dict)
 
     print(rect_frag_area_dict)
@@ -404,6 +476,10 @@ def run_script(iface):
     n_provider.addAttributes([QgsField("forest_13_area_perc", QVariant.Double)])
     n_provider.addAttributes([QgsField("forest_14_area", QVariant.Double)])
     n_provider.addAttributes([QgsField("forest_14_area_perc", QVariant.Double)])
+    n_provider.addAttributes([QgsField("forest_ar50_area", QVariant.Double)])
+    n_provider.addAttributes([QgsField("forest_ar50_area_perc", QVariant.Double)])
+    n_provider.addAttributes([QgsField("myr_ar50_area", QVariant.Double)])
+    n_provider.addAttributes([QgsField("myr_ar50_area_perc", QVariant.Double)])
     nitrogen.updateFields()
     nitrogen.commitChanges()
 
@@ -415,50 +491,66 @@ def run_script(iface):
         for i, feat in enumerate(nitrogen.getFeatures()):
 
             lnr_value = feat.attribute('lnr')
-            print('lnr value is: ' + str(lnr_value))
+            print('global: lnr value is: ' + str(lnr_value))
 
             # This will be a dictionary having as a key the lnr identification number of each rectangle fragment,
             # and as a value a list of dictionaries. Each dictionary in list will contain the area values of a rectangle
             # fragment with the same id of the original whole rectangle.
 
-            area_rect = sum([a_dict['area_rect'] for a_dict in rect_frag_area_dict[lnr_value]])
-            myr_area = sum([a_dict['myr_area'] for a_dict in rect_frag_area_dict[lnr_value]])
-            grass_area = sum([a_dict['grass_area'] for a_dict in rect_frag_area_dict[lnr_value]])
-            mountain_area = sum([a_dict['mountain_area'] for a_dict in rect_frag_area_dict[lnr_value]])
-            forest_11_area = sum([a_dict['forest_11_area'] for a_dict in rect_frag_area_dict[lnr_value]])
-            forest_13_area = sum([a_dict['forest_13_area'] for a_dict in rect_frag_area_dict[lnr_value]])
-            forest_14_area = sum([a_dict['forest_14_area'] for a_dict in rect_frag_area_dict[lnr_value]])
+            if rect_frag_area_dict[lnr_value]:
+                area_rect = sum([a_dict['area_rect'] for a_dict in rect_frag_area_dict[lnr_value]])
 
-            feat.setAttribute('area_rect', area_rect)
-            feat.setAttribute('myr_area', myr_area)
-            feat.setAttribute('grass_area', grass_area)
+                print(rect_frag_area_dict[lnr_value])
+                print(area_rect)
+                myr_area = sum([a_dict['myr_area'] for a_dict in rect_frag_area_dict[lnr_value]])
+                print(myr_area)
+                grass_area = sum([a_dict['grass_area'] for a_dict in rect_frag_area_dict[lnr_value]])
+                mountain_area = sum([a_dict['mountain_area'] for a_dict in rect_frag_area_dict[lnr_value]])
+                forest_11_area = sum([a_dict['forest_11_area'] for a_dict in rect_frag_area_dict[lnr_value]])
+                forest_13_area = sum([a_dict['forest_13_area'] for a_dict in rect_frag_area_dict[lnr_value]])
+                forest_14_area = sum([a_dict['forest_14_area'] for a_dict in rect_frag_area_dict[lnr_value]])
+                forest_ar50_area = sum([a_dict['forest_ar50_area'] for a_dict in rect_frag_area_dict[lnr_value]])
+                myr_ar50_area = sum([a_dict['myr_ar50_area'] for a_dict in rect_frag_area_dict[lnr_value]])
 
-            #TODO: remove. temp check
-            print(feat.attributes())
-            try:
-                feat.setAttribute('mountain_area', mountain_area)
-            except QgsException:
-                print("ouch")
-                pass
+                feat.setAttribute('area_rect', area_rect)
+                feat.setAttribute('myr_area', myr_area)
+                feat.setAttribute('grass_area', grass_area)
 
-            feat.setAttribute('forest_11_area', forest_11_area)
-            feat.setAttribute('forest_13_area', forest_13_area)
-            feat.setAttribute('forest_14_area', forest_14_area)
+                #TODO: remove. temp check
+                print(feat.attributes())
+                try:
+                    feat.setAttribute('mountain_area', mountain_area)
+                except QgsException:
+                    print("ouch")
+                    pass
 
-            myr_perc = myr_area / area_rect * 100
-            grass_perc = grass_area / area_rect * 100
-            mountain_perc = mountain_area / area_rect * 100
-            forest_11_perc = forest_11_area / area_rect * 100
-            forest_13_perc = forest_13_area / area_rect * 100
-            forest_14_perc = forest_14_area / area_rect * 100
+                feat.setAttribute('forest_11_area', forest_11_area)
+                feat.setAttribute('forest_13_area', forest_13_area)
+                feat.setAttribute('forest_14_area', forest_14_area)
+                feat.setAttribute('forest_ar50_area', forest_ar50_area)
+                feat.setAttribute('myr_ar50_area', myr_ar50_area)
 
-            feat.setAttribute('myr_area_perc', myr_perc)
-            feat.setAttribute('grass_area_perc', grass_perc)
-            feat.setAttribute('mountain_area_perc', mountain_perc)
-            feat.setAttribute('forest_11_area_perc', forest_11_perc)
-            feat.setAttribute('forest_13_area_perc', forest_13_perc)
-            feat.setAttribute('forest_14_area_perc', forest_14_perc)
-            nitrogen.updateFeature(feat)
+                try:
+                    myr_perc = myr_area / area_rect * 100
+                except QgsException:
+                    print('probably zero division error')
+                grass_perc = grass_area / area_rect * 100
+                mountain_perc = mountain_area / area_rect * 100
+                forest_11_perc = forest_11_area / area_rect * 100
+                forest_13_perc = forest_13_area / area_rect * 100
+                forest_14_perc = forest_14_area / area_rect * 100
+                forest_ar50_perc = forest_ar50_area / area_rect * 100
+                myr_ar50_perc = myr_ar50_area / area_rect * 100
+
+                feat.setAttribute('myr_area_perc', myr_perc)
+                feat.setAttribute('grass_area_perc', grass_perc)
+                feat.setAttribute('mountain_area_perc', mountain_perc)
+                feat.setAttribute('forest_11_area_perc', forest_11_perc)
+                feat.setAttribute('forest_13_area_perc', forest_13_perc)
+                feat.setAttribute('forest_14_area_perc', forest_14_perc)
+                feat.setAttribute('forest_ar50_area_perc', forest_ar50_perc)
+                feat.setAttribute('myr_ar50_area_perc', myr_ar50_perc)
+                nitrogen.updateFeature(feat)
 
 
     print("Hello again Simon! Processing completed!")
