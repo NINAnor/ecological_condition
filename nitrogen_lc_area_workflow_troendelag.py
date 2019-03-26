@@ -1,12 +1,7 @@
 #!/usr/bin/env python
-# Customize this starter script by adding code
-# to the run_script function. See the Help for
-# complete information on how to create a script
-# and use Script Runner.
-
-""" The following script loads and extracts land cover area percentages over a nitrogen layer in Trøndelag.
+""" The script loads and extracts land cover area percentages over a nitrogen layer in Trøndelag.
  This script defines a workflow iterating over all the Kommunes in Trøndelag Fylke.
- The script is designed to work with the Script runner plugin in QGIS 3.0 """
+ The script is designed to work with the 'Script runner' plugin in QGIS 3.0 """
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -26,7 +21,7 @@ def run_script(iface):
 
     # Set the working environment folders. Requires input data being organized in a precise structure
     working_directory = "C:/Data/Simon"
-    output_directory = '/very_new_outputs/'
+    output_directory = '/official_outputs/'
     nitrogen_outputs = '/nitrogen_outputs/'
     nitrogen_outputs_fullpath = working_directory + output_directory + nitrogen_outputs
 
@@ -126,7 +121,7 @@ def run_script(iface):
     rect_frag_area_dict = defaultdict(list)
 
 
-    ar5_directory = os.fsencode(working_directory + '/Input_AR5_layers/')
+    ar5_directory = os.fsencode(working_directory + '/Input_AR5_layers_all/')
 
     ###########################################################################
     # Iterating over kommunes in Troendelag fylke, and adding relevant layers #
@@ -232,6 +227,17 @@ def run_script(iface):
         ar50_myr_name = 'ar50_unregistered_myr_' + kommune_name
         ar50_unregistered_myr_kommune = query_layer(query11, input_layer, ar50_myr_name)
 
+        # find mountain in clipped AR50 covering Ar5 unregistered areas
+        query11 = u"ARTYPE = '50'"
+        input_layer = ar50_coverunregistered_kommune
+        ar50_mountain_rough_name = 'ar50_unregistered_mountain_rough_' + kommune_name
+        ar50_unregistered_mountain_rough_kommune = query_layer(query11, input_layer, ar50_mountain_rough_name)
+
+        # clip mountain areas in AR50 by forest limit
+        ar50_mountain_clean_name = 'ar50_mountain_clean_' + kommune_name
+        ar50_unregistered_mountain_clean_kommune = geoprocess_layer(clip_alg, ar50_unregistered_mountain_rough_kommune, forest_limit,
+                                                      ar50_mountain_clean_name)
+
         ######################################################################
         # Calculate area percentage per nitrogen rectangular clipped polygon #
         ######################################################################
@@ -255,6 +261,8 @@ def run_script(iface):
         n_provider.addAttributes([QgsField("forest_ar50_area_perc", QVariant.Double)])
         n_provider.addAttributes([QgsField("myr_ar50_area", QVariant.Double)])
         n_provider.addAttributes([QgsField("myr_ar50_area_perc", QVariant.Double)])
+        n_provider.addAttributes([QgsField("mountain_ar50_area", QVariant.Double)])
+        n_provider.addAttributes([QgsField("mountain_ar50_area_perc", QVariant.Double)])
         nitrogen_kommune.updateFields()
 
         rect_areas = {}
@@ -266,6 +274,7 @@ def run_script(iface):
         forest_14_areas = {}
         forest_ar50_areas = {}
         myr_ar50_areas = {}
+        mountain_ar50_areas = {}
 
         feats_nit = [feat for feat in nitrogen_kommune.getFeatures()]
 
@@ -331,6 +340,10 @@ def run_script(iface):
             temp_myr_ar50 = geoprocess_layer(clip_alg, ar50_unregistered_myr_kommune, temp_feat_layer,
                                                 ar50_unregistered_myr_kommune_name, add_layer=False)
 
+            ar50_unregistered_mountain_kommune_name = 'ar50_unregistered_mountain_kommune_' + kommune_name + '_' + str(i)
+            temp_mountain_ar50 = geoprocess_layer(clip_alg, ar50_unregistered_mountain_clean_kommune, temp_feat_layer,
+                                             ar50_unregistered_mountain_kommune_name, add_layer=False)
+
             ############################################
             # Store areas per fragment in dictionaries #
             ############################################
@@ -359,6 +372,8 @@ def run_script(iface):
             myr_ar50_area = calculate_area_over_clip(temp_myr_ar50)
             myr_ar50_areas[i] = myr_ar50_area
 
+            mountain_ar50_area = calculate_area_over_clip(temp_mountain_ar50)
+
             nitrogen_kommune.removeSelection()
 
             #####################################################################################
@@ -383,6 +398,7 @@ def run_script(iface):
                 feat.setAttribute('forest_14_area', forest_14_areas[i])
                 feat.setAttribute('forest_ar50_area', forest_ar50_areas[i])
                 feat.setAttribute('myr_ar50_area', myr_ar50_areas[i])
+                feat.setAttribute('mountain_ar50_area', mountain_ar50_areas[i])
 
                 myr_perc = myr_areas[i] / rect_areas[i] * 100
                 grass_perc = grass_areas[i] / rect_areas[i] * 100
@@ -392,6 +408,7 @@ def run_script(iface):
                 forest_14_perc = forest_14_areas[i] / rect_areas[i] * 100
                 forest_ar50_perc = forest_ar50_areas[i] / rect_areas[i] * 100
                 myr_ar50_perc = myr_ar50_areas[i] / rect_areas[i] * 100
+                mountain_ar50_perc = mountain_ar50_areas[i] / rect_areas[i] * 100
 
                 feat.setAttribute('myr_area_perc', myr_perc)
                 feat.setAttribute('grass_area_perc', grass_perc)
@@ -401,6 +418,7 @@ def run_script(iface):
                 feat.setAttribute('forest_14_area_perc', forest_14_perc)
                 feat.setAttribute('forest_ar50_area_perc', forest_ar50_perc)
                 feat.setAttribute('myr_ar50_area_perc', myr_ar50_perc)
+                feat.setAttribute('mountain_ar50_area_perc', mountain_ar50_perc)
                 nitrogen_kommune.updateFeature(feat)
 
 
@@ -441,6 +459,10 @@ def run_script(iface):
                     area_dict['myr_ar50_area'] = myr_ar50_areas[i]
                 else:
                     area_dict['myr_ar50_area'] = 0
+                if mountain_ar50_areas[i]:
+                    area_dict['mountain_ar50_area'] = mountain_ar50_areas[i]
+                else:
+                    area_dict['mountain_ar50_area'] = 0
                 area_dict['myr_area_perc'] = myr_perc
                 area_dict['grass_area_perc'] = grass_perc
                 area_dict['mountain_area_perc'] = mountain_perc
@@ -449,6 +471,7 @@ def run_script(iface):
                 area_dict['forest_14_area_perc'] = forest_14_perc
                 area_dict['forest_ar50_area_perc'] = forest_ar50_perc
                 area_dict['myr_ar50_area_perc'] = myr_ar50_perc
+                area_dict['mountain_ar50_area_perc'] = mountain_ar50_perc
 
                 # append the area dictionary to a list with key = rectangle identifier
                 rect_frag_area_dict[lnr_value].append(area_dict)
@@ -475,6 +498,8 @@ def run_script(iface):
     n_provider.addAttributes([QgsField("forest_ar50_area_perc", QVariant.Double)])
     n_provider.addAttributes([QgsField("myr_ar50_area", QVariant.Double)])
     n_provider.addAttributes([QgsField("myr_ar50_area_perc", QVariant.Double)])
+    n_provider.addAttributes([QgsField("mountain_ar50_area", QVariant.Double)])
+    n_provider.addAttributes([QgsField("mountain_ar50_area_perc", QVariant.Double)])
     nitrogen.updateFields()
     nitrogen.commitChanges()
 
@@ -498,6 +523,7 @@ def run_script(iface):
                 forest_14_area = sum([a_dict['forest_14_area'] for a_dict in rect_frag_area_dict[lnr_value]])
                 forest_ar50_area = sum([a_dict['forest_ar50_area'] for a_dict in rect_frag_area_dict[lnr_value]])
                 myr_ar50_area = sum([a_dict['myr_ar50_area'] for a_dict in rect_frag_area_dict[lnr_value]])
+                mountain_ar50_area = sum([a_dict['mountain_ar50_area'] for a_dict in rect_frag_area_dict[lnr_value]])
 
                 feat.setAttribute('area_rect', area_rect)
                 feat.setAttribute('myr_area', myr_area)
@@ -508,6 +534,7 @@ def run_script(iface):
                 feat.setAttribute('forest_14_area', forest_14_area)
                 feat.setAttribute('forest_ar50_area', forest_ar50_area)
                 feat.setAttribute('myr_ar50_area', myr_ar50_area)
+                feat.setAttribute('mountain_ar50_area', mountain_ar50_area)
 
                 myr_perc = myr_area / area_rect * 100
                 grass_perc = grass_area / area_rect * 100
@@ -517,6 +544,7 @@ def run_script(iface):
                 forest_14_perc = forest_14_area / area_rect * 100
                 forest_ar50_perc = forest_ar50_area / area_rect * 100
                 myr_ar50_perc = myr_ar50_area / area_rect * 100
+                mountain_ar50_perc = mountain_ar50_area / area_rect * 100
 
                 feat.setAttribute('myr_area_perc', myr_perc)
                 feat.setAttribute('grass_area_perc', grass_perc)
@@ -526,6 +554,7 @@ def run_script(iface):
                 feat.setAttribute('forest_14_area_perc', forest_14_perc)
                 feat.setAttribute('forest_ar50_area_perc', forest_ar50_perc)
                 feat.setAttribute('myr_ar50_area_perc', myr_ar50_perc)
+                feat.setAttribute('mountain_ar50_area_perc', mountain_ar50_perc)
                 nitrogen.updateFeature(feat)
 
     print("Hello again Simon! Processing completed!")
