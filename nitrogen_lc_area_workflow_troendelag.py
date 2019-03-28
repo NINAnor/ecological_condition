@@ -11,6 +11,8 @@ import processing
 from processing.core.Processing import Processing
 import os
 from collections import defaultdict
+from multiprocessing import Pool, TimeoutError
+import time
 
 Processing.initialize()
 
@@ -21,7 +23,7 @@ def run_script(iface):
 
     # Set the working environment folders. Requires input data being organized in a precise structure
     working_directory = "C:/Data/Simon"
-    output_directory = '/official_outputs/'
+    output_directory = '/corrected_outputs/'
     nitrogen_outputs = '/nitrogen_outputs/'
     nitrogen_outputs_fullpath = working_directory + output_directory + nitrogen_outputs
 
@@ -74,13 +76,13 @@ def run_script(iface):
                                                 working_directory + output_directory + output_name,
                                                 "utf-8", input_layer.crs(), "GPKG", onlySelected=True)
         layer = QgsVectorLayer(working_directory + output_directory + output_name+'.gpkg', output_name, 'ogr')
-        project.addMapLayer(layer)
+        #project.addMapLayer(layer)
         input_layer.removeSelection()
         return layer
 
     clip_alg = 'qgis:clip'
 
-    def geoprocess_layer(alg, input_layer, overlay, output_name, add_layer=True):
+    def geoprocess_layer(alg, input_layer, overlay, output_name, add_layer=False):
         params = {"INPUT": input_layer, "OVERLAY": overlay,
               "OUTPUT": working_directory + output_directory + output_name + '.gpkg'}
         processing.run(alg, params)
@@ -188,7 +190,7 @@ def run_script(iface):
         ar5_grass_kommune = query_layer(query5, input_layer, grass_name)
 
         # filter low-productive forest from forest layer (arskogbon = 11)
-        query6 = u"ARSKOGBON = '11'"
+        query6 = u"ARSKOGBON = '11' or ARSKOGBON = '12'"
         input_layer = ar5_forest_kommune
         forest_11_name = 'ar5_skog_11_' + kommune_name
         ar5_forest_11_kommune = query_layer(query6, input_layer, forest_11_name)
@@ -200,7 +202,7 @@ def run_script(iface):
         ar5_forest_13_kommune = query_layer(query7, input_layer, forest_13_name)
 
         # Filter  High-productive forest from forest layer (Arskogbon = 14)
-        query8 = u"ARSKOGBON = '14'"
+        query8 = u"ARSKOGBON = '14' OR ARSKOGBON = '15'"
         input_layer = ar5_forest_kommune
         forest_14_name = 'ar5_skog_14_' + kommune_name
         ar5_forest_14_kommune = query_layer(query8, input_layer, forest_14_name)
@@ -299,7 +301,7 @@ def run_script(iface):
             # selecting each rectangular nitrogen polygon one by one
             nitrogen_kommune.select(feat.id())
             temp_feat_layer = nitrogen_kommune.materialize(QgsFeatureRequest().setFilterFids(nitrogen_kommune.selectedFeatureIds()))
-            project.addMapLayer(temp_feat_layer)
+            #project.addMapLayer(temp_feat_layer)
 
             # process grassland
             ar5_grass_kommune_clip_name = 'ar5_grass_clip_' + kommune_name + '_' + str(i)
@@ -307,7 +309,7 @@ def run_script(iface):
 
             # process Myr
             ar5_myr_kommune_clip_name = 'ar5_myr_clip_' + kommune_name + '_' + str(i)
-            temp_myr_clip = geoprocess_layer(clip_alg, ar5_myr_kommune, temp_feat_layer, ar5_myr_kommune_clip_name, add_layer=True)
+            temp_myr_clip = geoprocess_layer(clip_alg, ar5_myr_kommune, temp_feat_layer, ar5_myr_kommune_clip_name, add_layer=False)
 
             # process mountain
             ar5_mountain_kommune_clip_name = 'ar5_mountain_clip_' + kommune_name + '_' + str(i)
@@ -317,7 +319,7 @@ def run_script(iface):
             #  forest sub-classes ###
             ###########################
 
-            # process skog with ARskogbon = 11
+            # process skog with ARskogbon = 11 and 12
             ar5_forest_11_kommune_name = 'ar5_forest_11_kommune_' + kommune_name + '_' + str(i)
             temp_forest_11 = geoprocess_layer(clip_alg, ar5_forest_11_kommune, temp_feat_layer, ar5_forest_11_kommune_name,
                              add_layer=False)
@@ -327,7 +329,7 @@ def run_script(iface):
             temp_forest_13 = geoprocess_layer(clip_alg, ar5_forest_13_kommune, temp_feat_layer, ar5_forest_13_kommune_name,
                              add_layer=False)
 
-            # process skog with ARskogbon = 14
+            # process skog with ARskogbon = 14 and 15
             ar5_forest_14_kommune_name = 'ar5_forest_14_kommune_' + kommune_name + '_' + str(i)
             temp_forest_14 = geoprocess_layer(clip_alg, ar5_forest_14_kommune, temp_feat_layer, ar5_forest_14_kommune_name,
                              add_layer=False)
@@ -373,6 +375,7 @@ def run_script(iface):
             myr_ar50_areas[i] = myr_ar50_area
 
             mountain_ar50_area = calculate_area_over_clip(temp_mountain_ar50)
+            mountain_ar50_areas[i] = mountain_ar50_area
 
             nitrogen_kommune.removeSelection()
 
