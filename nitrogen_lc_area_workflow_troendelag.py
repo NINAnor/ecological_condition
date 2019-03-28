@@ -57,7 +57,7 @@ def run_script(iface):
     # Save the nitrogen layer as an output with a different name
 
     nitrogen = QgsVectorLayer(nitrogen_outputs_fullpath + 'nitrogen_troendelag_output.gpkg', 'nitrogen', 'ogr')
-    forest_limit = QgsVectorLayer(working_directory + '/Outputs/script/forest_limit_fixed.gpkg',
+    forest_limit = QgsVectorLayer(working_directory + '/forest_limit/forest_limit_fixed.gpkg',
                                   'forest_limit', 'ogr')
 
     project.addMapLayer(n50)
