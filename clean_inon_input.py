@@ -32,7 +32,7 @@ def run_script(iface):
     alg_clean = u'native:fixgeometries'
 
 
-    for file in os.listdir(wilderness_areas):
+    for file in os.listdir(wilderness_areas+ 'old_inon/'):
         filename = os.fsdecode(file)
 
         if filename.endswith('.shp'):
