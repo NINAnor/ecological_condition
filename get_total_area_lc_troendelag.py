@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-""" The script loads and extracts land cover area percentages over wilderness INON layers in Trøndelag.
+""" The script updates layers with area calculations over wilderness areas in Trøndelag
+(obtained with the inon_area_troendelag.py script) with additional total areas per lc for trøndelag.
  This script defines a workflow iterating over all the Kommunes in Trøndelag Fylke.
  The script is designed to work with the 'Script runner' plugin in QGIS 3.0 """
 
