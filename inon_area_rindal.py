@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """ The script loads and extracts land cover area percentages over wilderness INON layers in Trøndelag.
- This script defines a workflow iterating over all the Kommunes in Trøndelag Fylke.
+ This script defines a workflow iterating over rindal kommune only, missing in previous workflows (inon_area_troendelag).
  The script is designed to work with the 'Script runner' plugin in QGIS 3.0 """
 
 from PyQt5.QtCore import *
@@ -21,7 +21,7 @@ def run_script(iface):
 
     # Set the working environment folders. Requires input data being organized in a precise structure
     working_directory = "C:/Data/Simon"
-    output_directory = '/inon_outputs_rindal/'
+    output_directory = '/inon_outputs_rindal_official/'
     wilderness_outputs = working_directory + output_directory + 'wilderness_outputs/'
     wilderness_areas = working_directory + '/wilderness areas/'
     inon_ar50_clipped_inputs = working_directory + '/inon_ar50_clipped/'
@@ -160,11 +160,8 @@ def run_script(iface):
 
     for file in os.listdir(ar5_directory):
         filename = os.fsdecode(file)
-        kommune_name = filename[15:-19]
-        if kommune_name == 'Rindal':
-            kommune_num = '1567'
-        else:
-            kommune_num = filename[10:].split('_', 1)[0]
+        kommune_name = 'rindal'
+        kommune_num = '1567'
 
         # extract the current kommune's contour polygon
         query = "Kommunenum = '" + kommune_num + "'"

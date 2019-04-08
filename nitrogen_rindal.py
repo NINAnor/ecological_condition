@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """ The script loads and extracts land cover area percentages over a nitrogen layer in Trøndelag.
- This script defines a workflow iterating over all the Kommunes in Trøndelag Fylke.
+ This script defines a workflow iterating over the Rindal kommune only, missing in previous workflows (nitrogen_lc_area_workflow_troendelag).
  The script is designed to work with the 'Script runner' plugin in QGIS 3.0 """
 
 from PyQt5.QtCore import *
