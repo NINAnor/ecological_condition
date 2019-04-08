@@ -24,8 +24,8 @@ def run_script(iface):
     # Set the working environment folders. Requires input data being organized in a precise structure
     working_directory = "C:/Data/Simon"
     rindal_input = working_directory + '/clean_input_AR5_rindal'
-    rindal_output = working_directory + '/rindal_outputs/'
-    output_directory = rindal_output + 'ouputs/'
+    rindal_output = working_directory + '/rindal_outputs_official/'
+    output_directory = rindal_output + 'outputs/'
 
     if os.path.isdir(rindal_output):
         pass
@@ -63,8 +63,16 @@ def run_script(iface):
     # Save the nitrogen layer as an output with a different name
 
     nitrogen = QgsVectorLayer(rindal_output + 'nitrogen_rindal_output.gpkg', 'nitrogen', 'ogr')
-    forest_limit = QgsVectorLayer(working_directory + '/forest_limit/forest_limit_fixed.gpkg',
-                                  'forest_limit', 'ogr')
+    forest_limit_rough = QgsVectorLayer(rindal_input + '/extra_forest_clipped_shape_10.shp',
+                                  'forest_limit_rough', 'ogr')
+
+    alg = u'native:fixgeometries'
+    params = {"INPUT": forest_limit_rough,
+              "OUTPUT": rindal_output + 'forest_limit_rindal.gpkg'}
+    processing.run(alg, params)
+
+    forest_limit = QgsVectorLayer(rindal_output + 'forest_limit_rindal.gpkg',
+                                        'forest_limit', 'ogr')
 
     project.addMapLayer(rindal_polygon)
     project.addMapLayer(ar50_troendelag)
@@ -75,9 +83,9 @@ def run_script(iface):
         selection = input_layer.getFeatures(QgsFeatureRequest().setFilterExpression(query))
         input_layer.select([k.id() for k in selection])
         QgsVectorFileWriter.writeAsVectorFormat(input_layer,
-                                                working_directory + output_directory + output_name,
+                                                output_directory + output_name,
                                                 "utf-8", input_layer.crs(), "GPKG", onlySelected=True)
-        layer = QgsVectorLayer(working_directory + output_directory + output_name+'.gpkg', output_name, 'ogr')
+        layer = QgsVectorLayer(output_directory + output_name+'.gpkg', output_name, 'ogr')
         #project.addMapLayer(layer)
         input_layer.removeSelection()
         return layer
@@ -86,9 +94,9 @@ def run_script(iface):
 
     def geoprocess_layer(alg, input_layer, overlay, output_name, add_layer=False):
         params = {"INPUT": input_layer, "OVERLAY": overlay,
-              "OUTPUT": working_directory + output_directory + output_name + '.gpkg'}
+              "OUTPUT": output_directory + output_name + '.gpkg'}
         processing.run(alg, params)
-        output_layer = QgsVectorLayer(working_directory + output_directory + output_name + '.gpkg',
+        output_layer = QgsVectorLayer(output_directory + output_name + '.gpkg',
                                             output_name, 'ogr')
         if add_layer == True:
             project.addMapLayer(output_layer)
@@ -131,15 +139,16 @@ def run_script(iface):
 
     nitrogen_kommune = nitrogen
 
-    n50_kommune = rindal_polygon
+    #n50_kommune = rindal_polygon
 
     # clip ar50 over current Kommune
     ar50_kommune_name = 'ar50_' + kommune_name
-    ar50_kommune = geoprocess_layer(clip_alg, ar50_troendelag, n50_kommune, ar50_kommune_name)
+    ar50_kommune = QgsVectorLayer(rindal_input + ar50_kommune_name + '.gpkg',
+                                            ar50_kommune_name, 'ogr')
 
     # now pointing to the layers with fixed geometries (clean_AR5_layers_geometries.py)
     ar5_kommune = QgsVectorLayer(
-        ar5_directory + 'clean_ar5_' + kommune_num + '_' + kommune_name + '.gpkg',
+        rindal_input + '/ar5_rindal/clean_ar5_' + kommune_num + '_' + kommune_name + '.gpkg',
         'ar5_clean_' + kommune_name, 'ogr')
     project.addMapLayer(ar5_kommune)
 
@@ -153,8 +162,7 @@ def run_script(iface):
 
     # clip mountain areas in AR5 by forest limit
     mountain_clean_name = 'ar5_mountain_clean_' + kommune_name
-    ar5_mountain_clean_kommune = geoprocess_layer(clip_alg, ar5_mountain_rough_kommune, forest_limit,
-                                                  mountain_clean_name)
+    ar5_mountain_clean_kommune = geoprocess_layer(clip_alg, ar5_mountain_rough_kommune, forest_limit, mountain_clean_name)
 
     # Selecting forest type from AR5 (ARTYPE 30, which includes more detailed classes: ARSKOGBON)
     query3 = u"ARTYPE = '30'"
